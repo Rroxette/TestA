@@ -1,0 +1,165 @@
+Etape 1 : Configurer l’interface Fa 0/0 du routeur
+RouterA>enable
+RouterA#configure terminal
+RouterA(config)#interface FastEthernet0/0
+RouterA(config-if)#ip address 192.168.10.1 255.255.255.0
+RouterA(config-if)#no shutdown
+Etape2 : Le DHCP Serveur Sur ce Routeur
+Explications supplémentaire :
+Le serveur DHCP est nécessaire pour fournir une adresse IP et l'emplacement du
+serveur TFTP pour chaque téléphone IP connecté au réseau.
+#Create DHCP pool named VOICE
+RouterA(config)#ipdhcp pool VOICE
+#DHCP network network 192.168.10 with /24 mask#
+RouterA(dhcp-config)#network 192.168.10.0 255.255.255.0
+#The default router IP address#
+RouterA(dhcp-config)#default-router 192.168.10.1
+#Mandatory for VoIP configuration.
+RouterA(dhcp-config)#option 150 ip 192.168.10.1
+Après la configuration, attendez un instant et vérifier que "IP Phone 1» reçoive une
+adresse IP en plaçant votre curseur sur le téléphone jusqu'à ce qu'un résumé de la
+configuration apparaît.
+Attention Avant l’étape 3 a bien alimenter les téléphone cisco dans paquet tracert car il
+ne sont pas POE
+Etape3 : Configuration du Service de Téléphonie
+Vous devez maintenant configurer le service de téléphonie Call Manager Express sur
+RouterA pour permettre VoIP sur votre réseau.
+#Configuring the router for telephony services#
+RouterA(config)#telephony-service
+#Define the maximum number of directory numbers#
+RouterA(config-telephony)#max-dn 5
+#Define the maximum number of phones#
+RouterA(config-telephony)#max-ephones 5
+#IP Address source#
+RouterA(config-telephony)#ip source-address 192.168.10.1 port 2000
+#Automatically assigning ext numbers to buttons#
+RouterA(config-telephony)#auto assign 4 to 6
+#Automatically assigning ext numbers to buttons#
+RouterA(config-telephony)#auto assign 1 to 5
+Etape4 : Configuration du Vlan Voice sur le Switch A
+Configuration du vlan VOICE sur le Switch A.
+Cette configuration séparer le trafic voix et de données dans différents VLAN sur Switch A.
+#Configure interface range#
+SwitchA(config)#interface range fa0/1 – 5
+SwitchA(config-if-range)#switchport mode access
+#Define the VLAN on which voice packets will be handled#
+SwitchA(config-if-range)#switchport voice vlan 1
+Etape5 : Configuration Du Téléphone IP 1
+Bien que «Téléphone IP 1 'est déjà connecté au commutateur, il a besoin d’une configuration
+supplémentaire avant d'être en mesure de communiquer. On configure le Router A pour
+attribuer un numéro de téléphone à ce téléphone IP.
+#Defining the first directory entry#
+RouterA(config)#ephone-dn 1
+#Assign the phone number to this entry#
+RouterA(config-ephone-dn)#number 101
+Connect IP Phone 2 to SwitchA and power the phone ON using the power adapter (Physical
+tab).
+#Defining the first directory entry#
+RouterA(config)#ephone-dn 2
+#Assign the phone number to this entry#
+RouterA(config-ephone-dn)#number 102
+Etape6 : Vérifier la Configuration
+Composez 101 et vérifier si le téléphone IP 1 reçoit correctement l'appel.
+Si problème , vérifier les Ip’s des téléphone et si le routeur arrive a ping ceux ci.
+
+Pour désactiver CDP -> (config)#no cdp run
+Sur le routeur : Configuration des interfaces
+#conf t
+#int fastEthernet 0/0
+#no shut
+#exit
+#interface fastethernet 0/0.X (10)
+#encapsulation dot1Q X (10)
+#ip addresse X X (192.168.1.150 255.255.255.0)
+Configuration du service DHCP
+(config)#ip dhcp pool X (VOIP)
+(dhcp-config)#network X X (192.168.1.0 255.255.255.0)
+/***/(dhcp-config)# range deTelleAdresse àTelleAdresse (pas test)
+(dhcp-config)#default-router IP_ROUTEUR (192.168.1.150)
+// adresse du routeur dans le Vlan voice
+(dhcp-config)#option 150 ip IP_ROUTEUR (192.168.1.150)
+// adresse du serveur TFTP/Call manager,
+dans le cas présent on n'utilise qu'un routeur donc l'adresse est la même qu'au-dessus.
+(dhcp-config)# exit
+Configuration de la clock
+(config)#clock timezone CET +1
+exit
+#clock set HH:MM:SS MONTH D YEAR
+// ex : oct 26 2013
+#clock set 11 :11 :00 14 Jan 2014
+//idem jours avant mois
+Configuration du service tel
+(config)#telephony-service
+(config-telephony)#max-dn X (5)
+// nombre de numéro d'extension autorisé (101,102,103,200,203)
+(config-telephony)#max-ephones X (3)
+// nombre de téléphones autorisé
+(config-telephony)#ip source-address IP_ROUTEUR(192.168.1.150) port 2000
+// le port 2000 est le port par défaut
+(config-telephony)#auto assign X to Y (1 to 3)
+// assigne automatiquement les adresses IP au téléphone
+(config-telephony)#system message MESSAGE
+(config-telephony)#create cnf-files
+// Assigne les adresses MAC automatiquement //
+time-format 24
+date-format dd-mm-yy
+Configuration des e-phone
+/!\ reproduire pour chaque DN 101,102,103
+(config)#ephone-dn X (1) *dual-line*
+(config-ephone-dn)#number X (101)
+(config-ephone-dn)#name IDX (ID101)
+(config-ephone-dn)#description NAME (Téléphone1)
+ephone-dn 4
+number 200
+description Call1et2
+ephone-dn 5
+number 203
+description Call3Silent
+Configuration des boutons
+(config)#ephone X
+// X corresponds au numéro de téléphone
+(config-ephone)#button X:Y X:Y
+// Un X correspond à un bouton et Y à l'extension associée au bouton
+NB : pour mettre un DN en silencieux il faut remplacer ':' par 's'
+On va faire en sorte que cet ephone 1 soit joignable par l’intermédiaire du num 200 (ephone-dn 4)
+(config)#ephone 1
+(config-ephone)#no button 1 :1
+(config-ephone)#button 1 :1 2 :4
+//le bouton 1 correspond à l’extension 1 et le bouton 2 correspond à l’extension 4
+On branche un deuxième téléphone et on le configure de la même façon (Vous devez le voir
+s’enregistrer en tant que ephone 2 bien entendu)
+On lui rajoute aussi l’ephone-dn 4
+(config)#ephone 2
+(config-ephone)#no button 1 :2
+(config-ephone)#button 1:2 2:4
+//le bouton 1 correspond à l’extension 2 et le bouton 2 correspond à l’extension 4 Finalement on
+rajoute le 3ème téléphone, et cette fois-ci, on lui rajoute l’extension 5 (numero 203) en silencieux.
+(config)#ephone 3
+(config-ephone)#no button 1 :3
+(config-ephone)#button 1:3 2s5
+//le bouton 1 correspond à l’extension 3 et le bouton 2 correspond à l’extension 5
+NB old :
+Si vous voulez que l’un des 3 téléphones soit un hardphone :
+1. Regarder ce que contient la flash de votre router
+2. S’il y a des fichiers commencent par « sccp… » Vous pouvez utiliser un hardphone, sinon il faut les
+télécharger et les décompresser dans la flah
+3. Quand c’est fait, vous mettez ces fichiers dans le tftp server du router
+#tftp-server leNomDufichier
+Vous faites cela pour tous les fichiers.
+On retourne dans telephony-service et on crée les cnf-files (on pourrait aussi le faire tout à la fin)
+Quand tout cela est fait, on connecte les téléphones (softwares)
+1. On ouvre le cisco ip communicator
+2. On suit les instructions (si c’est la première fois qu’il est ouvert)
+3. On configure le tftp server (on met l’ip du routeur) ( si l’option 150 n’est pas spécifiée )
+4. On exit et on revient
+Comme on a mis en auto assign c’est pratique car il va recevoir un numéro automatiquement :
+Si c’est le premier téléphone ce sera l’ephone 1 et aura comme numéro la première extension à
+savoir 101.
+Si on fait un show runn on verra une mac associée à l’ephone 1, donc on a pas eu besoin d’entrer une
+mac nous-même, car on a mis « auto assign », c’est donc bien plus pratique.
+On peut aussi voir que le bouton 1 est associé au ephone-dn 1 (button 1 :1)
+NB : à moins que la conférence soit activée, lorsqu'on utilise un hardphone pour téléphoner,
+il occupe une ligne (si d'autre hardphone sont configuré avec cette ligne, le bouton s'allume ne rouge
+pour signifier que la ligne n'est plus disponible).
+NB : chaque numéro est associé à une ligne, lorsque l'on reçoit un appel sur une ligne on reste libre
+d'utiliser d'autres lignes pour émettre/recevoir.
