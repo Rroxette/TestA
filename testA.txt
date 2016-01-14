@@ -1,0 +1,163 @@
+Mise à jour d’apt & installation des paquets requis
+apt-get install && apt-get upgrade && reboot
+apt-get install build-essential linux-headers-$(uname -r)
+verifier:  wget libssl-dev libncurses5-dev libnewt-dev libxml2-dev  libsqlite3-dev chkconfig uuid-dev libjansson-dev
+
+
+cd /usr/src
+wget http://downloads.asterisk.org/pub/telephony/asterisk/asterisk-13-current.tar.gz
+wget http://downloads.asterisk.org/pub/telephony/libpri/libpri-1.4-current.tar.gz
+wget http://downloads.asterisk.org/pub/telephony/dahdi-linux-complete/dahdi-linux-complete-2.10.2+2.10.2.tar.gz
+
+tar -xzvf XXX
+(dans /contrib/scripts/> ./install_prereq install)
+
+cd XXX
+dahdi: make, make install, make config
+libpri: make, make install
+asterisk:  ./configure -prefix=/usr
+			make menuselect (Utilities : sélectionner aelparse
+						Core Sound Packages : ajouter sons EN et FR pour ULAW et GSM
+						Extras Sound Packages : ajouter les sons moh (GSM et ULAW)
+						Applications : choisir app_meetme)
+			make, make install, make samples, make config
+
+verifier dans /etc/init.d si dahdi et asterisk ok
+Service dahdi restart
+Service asterisk restart
+
+Configuration des extensions
+	nano /etc/asterisk/extensions.conf
+		[labo]
+		exten => 101, 1, Dial (SIP/101,20)
+		exten => 101, 2, Hangup ()
+		exten =>102, 1, Dial (SIP/102,20)
+		exten => 102, 2, Hangup ()
+Configuration des users
+	nano /etc/asterisk/sip.conf
+		[101]
+		type=friend
+		host=dynamic
+		username=Phone1
+		secret=101
+		context=labo
+		[102]
+		type=friend
+		host=dynamic
+		username=Phone2
+		secret=102
+		context=labo
+		
+		
+Configuration du trunk  
+	nano /etc/asterisk/iax.conf
+	Sur Serveur 1
+		[trunk-Asterisk2]
+		type=peer username=user
+		secret=123456
+		host= #AdresseIpDeuxiemeServer#
+		trunk=yes
+		qualify=yes
+		[user]
+		type=user
+		secret=123456
+		context=local
+	Sur Serveur 2
+		[trunk-Asterisk1]
+		type=peer username=user
+		secret=123456
+		host= #AdresseIpPremierServer#
+		trunk=yes
+		qualify=yes
+		[user]
+		type=user
+		secret=123456
+		context=local
+		
+	/etc/asterisk/extensions.conf
+	Serveur 1
+		[labo]
+		exten => 101, 1, Dial (SIP/101,20) //20 sec
+		exten => 101, 2, Hangup ()
+		exten =>102, 1, Dial (SIP/102,20)
+		exten => 102, 2, Hangup ()
+		
+		exten => _00XXX,1,Dial(IAX2/trunk-Asterisk2/${EXTEN:2},)
+	Serveur 2
+		[labo]
+		exten => 101, 1, Dial (SIP/101,20)
+		exten => 101, 2, Hangup ()
+		exten =>102, 1, Dial (SIP/102,20)
+		exten => 102, 2, Hangup ()
+		
+		exten => _00XXX,1,Dial(IAX2/trunk-Asterisk1/${EXTEN:2},)
+		
+nano /etc/asterisk/users.conf
+	[103]
+	type=friend
+	host=dynamic
+	username=Phone3
+	secret=101
+	context=labo
+nano /etc/asterisk/meetme.conf
+	[rooms]
+	conf => 1,1234 				(pin)
+	nano /etc/asterisk/extensions.conf
+	exten => 1000,1,Meetme(1)   		(quand on appelle le 100 on tombe sur la conférence)
+	
+	
+/etc/asterisk/voicemail.conf 
+mailbox_number => password, name, email
+	[general]
+	format=ulaw|wav49|gsm|wav
+	attach=yes
+	[default]
+	777 = 1001, phone1
+	777 = 1002, phone2	
+		
+/etc/asterisk/extensions.conf		
+	[labo]
+	exten => 101, 1, Dial (SIP/101,20)
+	exten => 101, 2, Voicemail(${EXTEN})
+	exten => 101, 3, Hangup ()
+	
+	exten => 102, 1, Dial (SIP/102,20)
+	exten => 102, 2, Voicemail(${EXTEN})
+	exten => 102, 2, Hangup ()	
+
+	
+//IVR
+//Asterisk répond
+	exten => 800,1,Answer()
+//On met un timeout de 10 secondes pour le choix du destinataire
+	exten => 800,2,Set(TIMEOUT(response)=10)
+//On annonce les différents choix
+	exten => 800,3,agi(googletts.agi,"Bienvenues chez Scuvée!",fr,any)
+	exten => 800,4,agi(googletts.agi,"Qui souhaitez vous joindre?",fr,any)
+	exten => 800,5,agi(googletts.agi,"Pour Candice tapez 1",fr,any)
+	exten => 800,6,agi(googletts.agi,"Pour Francis tapez 2",fr,any) exten => 800,7,agi(googletts.agi,"Appuyez sur dièse si vous souhaitez réécouter ce message",fr,any)
+//On attend que l'utilisateur appuis sur une touche
+	exten => 800,8,WaitExten()
+//Si l'utilisateur appuis sur 1 on va à la priorité 1 du numéro 6001
+	exten => 1,1,Goto(101,1)
+//Si l'utilisateur appuis sur 1 on va à la priorité 1 du numéro 6002
+	exten => 2,1,Goto(102,1)
+//Si l'utilisateur tape un numéro compris entre 3 et 9 et # il retourne à l'étape 3 de l'IVR
+	exten => _[3-9#],1,Goto(800,3)
+//Si l'utilisateur ne fais rien il retourne à l'étape 3 de l'IVR au bout de 10 secondes.
+	exten => t,1,Goto(800,3)
+
+
+Console Asterisk
+ asterisk -rvvvvvv
+ Quelques commandes utiles :
+	o iax2 show peers //Connaitre les connexion Iax2
+	o core show applications //Connaitre les applications installée
+	o sip show users //Connaitre les utilisateur inscrit
+	o dialplan show Local //Connaitre le DialPlan pour Local
+	o iax2 set debug on //Activé le debut pour le iax2
+ La tabulation fonctionne comme sur du Cisco, et permet de trouver ce qu’on a besoin.
+
+
+
+	
